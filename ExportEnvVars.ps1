@@ -35,21 +35,47 @@ if ($selection -eq "all") {
     }
 }
 
-# Export selected variables to a secure file
+# Export selected variables with password protection
 # $exportPath = "$env:USERPROFILE\Documents\EnvVarExport.json"
 $exportPath = "$env:USERPROFILE\Dropbox\SOFTWARE\Scripts\EnvVarExport.json"
+
+# Prompt for a password
+$passwordSecure = Read-Host "Enter a password to protect your environment variables" -AsSecureString
 $exportData = @{}
 
 foreach ($var in $selected) {
     $exportData[$var.Name] = $var.Value
 }
 
-# Encrypt the data
-$secureString = ConvertTo-SecureString -String (ConvertTo-Json $exportData -Depth 10) -AsPlainText -Force
-$encryptedData = ConvertFrom-SecureString -SecureString $secureString
+# Convert to JSON
+$jsonString = ConvertTo-Json $exportData -Depth 10
+$secureJsonString = ConvertTo-SecureString $jsonString -AsPlainText -Force
 
-# Save to file
-$encryptedData | Out-File $exportPath
-
-Write-Host "`nExported selected environment variables to: $exportPath" -ForegroundColor Green
-Write-Host "This file is encrypted and can only be imported by your Windows user account" -ForegroundColor Yellow
+try {
+    # Generate a 256-bit key from the password
+    $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($passwordSecure)
+    $passwordText = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
+    [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+    
+    # Create a 32-byte (256-bit) key using SHA256
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    $key = $sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($passwordText))
+    
+    # Convert the key to a byte array of the proper length
+    $encryptedData = ConvertFrom-SecureString -SecureString $secureJsonString -Key $key
+    
+    # Save to file
+    $encryptedData | Out-File $exportPath
+    
+    Write-Host "`nExported selected environment variables to: $exportPath" -ForegroundColor Green
+    Write-Host "You'll need to enter the same password when importing these variables" -ForegroundColor Yellow
+}
+catch {
+    Write-Host "`nError encrypting environment variables: $($_.Exception.Message)" -ForegroundColor Red
+}
+finally {
+    # Clean up sensitive variables
+    if ($passwordText) { $passwordText = $null }
+    if ($key) { $key = $null }
+    [System.GC]::Collect()
+}
