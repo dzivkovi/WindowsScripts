@@ -35,9 +35,20 @@ if (Test-Path $importPath) {
         Write-Host "`nImporting environment variables as $target variables..." -ForegroundColor Yellow
         
         # Import the variables
-        $importedVars.PSObject.Properties | ForEach-Object {
-            [Environment]::SetEnvironmentVariable($_.Name, $_.Value, $target)
-            Write-Host "Imported: $($_.Name)" -ForegroundColor Green
+        $showOnly = $true  # Set to false to actually import variables
+        
+        # And modify the import section:
+        if (-not $showOnly) {
+            # Import the variables
+            $importedVars.PSObject.Properties | ForEach-Object {
+                [Environment]::SetEnvironmentVariable($_.Name, $_.Value, $target)
+                Write-Host "Imported: $($_.Name)" -ForegroundColor Green
+            }
+        } else {
+            Write-Host "`nDRY RUN - would import these variables:" -ForegroundColor Yellow
+            $importedVars.PSObject.Properties | ForEach-Object {
+                Write-Host "$($_.Name) = $($_.Value)" -ForegroundColor Gray
+            }
         }
         
         Write-Host "`nEnvironment variables imported successfully!" -ForegroundColor Green
